@@ -1,4 +1,5 @@
 ejemplo.py
 pruebas.ipynb
 *.geojson
-estat_trafic_VLC/
+data/
+move_data.sh
