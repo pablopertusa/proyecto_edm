@@ -3,3 +3,5 @@ pruebas.ipynb
 *.geojson
 data/
 move_data.sh
+modelo.ipynb
+models/
