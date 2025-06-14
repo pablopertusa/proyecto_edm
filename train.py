@@ -4,6 +4,7 @@ from sklearn.metrics import accuracy_score, classification_report
 import numpy as np
 import joblib
 import lightgbm as lgb
+from collections import Counter
 
 def evaluar_modelo(model, X_test_data, y_test_data, model_name="Modelo de Clasificación"):
     print(f"\n--- Evaluación del Modelo: {model_name} ---")
@@ -13,20 +14,50 @@ def evaluar_modelo(model, X_test_data, y_test_data, model_name="Modelo de Clasif
     print("\nReporte de Clasificación:")
     print(classification_report(y_test_data, y_pred, zero_division=0))
 
-def train(id: str, df_cleaned, eval = False):
+
+def train(id: str, df_cleaned, eval=False):
+    # Para quitar observaciones muy poco frecuentes que causaban problemas en el entrenamiento
     df_cleaned = df_cleaned.with_columns(pl.col(id).count().over(id).alias("conteo"))
     df_cleaned = df_cleaned.filter(pl.col("conteo") >= 2)
     df_cleaned = df_cleaned.drop("conteo")
+
     X = df_cleaned.select(["year", "month", "day", "weekday", "is_business_day", "hour"])
     y = df_cleaned.select(id)
-    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy().flatten(), test_size=0.2, random_state=42, stratify=y.to_numpy().flatten())
 
-    model = lgb.LGBMClassifier(random_state=27, objective='multiclass', num_class=len(np.unique(y_train)),
-                               n_estimators=100, learning_rate=0.01, max_depth=-1, verbose=0)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X.to_numpy(),
+        y.to_numpy().flatten(),
+        test_size=0.2,
+        random_state=42,
+        stratify=y.to_numpy().flatten()
+    )
+
+    # Contar la frecuencia de cada clase en el conjunto de entrenamiento
+    class_counts = Counter(y_train)
+    total_samples = len(y_train)
+    
+    # Aquí usaremos el inverso de la proporción para dar más peso a las clases minoritarias.
+    class_weights = {}
+    for class_label, count in class_counts.items():
+        if count > 0:
+            class_weights[class_label] = total_samples / (len(class_counts) * count)
+        else:
+            class_weights[class_label] = 0
+
+    model = lgb.LGBMClassifier(
+        random_state=27,
+        objective='multiclass',
+        num_class=len(np.unique(y_train)),
+        n_estimators=100,
+        learning_rate=0.01,
+        max_depth=-1,
+        verbose=-1,
+        class_weight=class_weights
+    )
     model.fit(X_train, y_train)
 
     if eval:
-        evaluar_modelo(model, X_test, y_test, model_name="LightGBM")
+        evaluar_modelo(model, X_test, y_test, model_name="LightGBM con Pesos de Clase")
 
     return model
 

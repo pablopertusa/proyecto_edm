@@ -1,8 +1,12 @@
 import streamlit as st
+import polars as pl
 import pydeck as pdk
 import pandas as pd
+import holidays
 import datetime
 import json
+import joblib
+import numpy as np
 
 st.set_page_config(layout="wide", page_title="Estado Carreteras Valencia")
 st.title("Estado carreteras Valencia")
@@ -25,24 +29,89 @@ selected_datetime = datetime.datetime.combine(selected_date, selected_time)
 
 st.write(f"Has seleccionado: **{selected_datetime.strftime('%d/%m/%Y %H:%M')}**")
 
-# Función para determinar el color de la carretera
-# NOTA: Esta es una implementación de ejemplo para mostrar la reactividad.
-# DEBES REEMPLAZAR LA LÓGICA DE ESTA FUNCIÓN CON LA TUYA PROPIA.
+def get_business_day(fecha: datetime.datetime, pais: str = 'ES') -> bool:
+    """
+    Verifica si una fecha es un día laborable, considerando fines de semana y festivos.
+
+    Args:
+        fecha: El objeto datetime.datetime a verificar.
+        pais: El código ISO 3166-1 alpha-2 del país (ej. 'ES' para España).
+              Puedes pasar una lista de países si aplica a múltiples jurisdicciones.
+    """
+    if fecha.weekday() >= 5:  # 5 es sábado, 6 es domingo
+        return False
+
+    dias_festivos = holidays.country_holidays(pais, years=fecha.year)
+
+    return fecha.date() not in dias_festivos
+
+
+def predict_traffic_status(
+    model_path: str,
+    target_datetime: datetime.datetime,
+    country_code: str = 'ES' # Código de país para los días festivos
+    ) -> int:
+    """
+    Carga un modelo .joblib y predice el estado del tráfico para una fecha y hora dadas.
+
+    Args:
+        model_path (str): La ruta al archivo del modelo .joblib.
+        target_datetime (datetime.datetime): La fecha y hora para la cual se realizará la predicción.
+        country_code (str): El código ISO del país para determinar los días festivos
+                            (por ejemplo, 'ES' para España).
+
+    Returns:
+        int: La predicción del modelo para el estado del tráfico.
+    """
+    try:
+        model = joblib.load(model_path)
+    except FileNotFoundError:
+        print(f"Error: El archivo del modelo no se encontró en '{model_path}'")
+        return -1
+
+    year = target_datetime.year
+    month = target_datetime.month
+    day = target_datetime.day
+    weekday = target_datetime.weekday()
+    is_business_day = get_business_day(target_datetime, country_code)
+    hour = target_datetime.hour
+
+    features = np.array([[year, month, day, weekday, int(is_business_day), hour]])
+
+    prediction = model.predict(features)[0]
+    print(prediction)
+
+    return prediction
+
 def get_color_for_road(gid: str, current_datetime: datetime.datetime):
-    # Lógica de ejemplo: el color cambia con la hora del día
-    hour = current_datetime.hour
+    model_path = f"models/model_{gid}.joblib"
+    traffic_code = predict_traffic_status(model_path, current_datetime)
 
-    # Simulación de tráfico:
-    # Mañana (6-9h) y tarde (17-20h): Rojo (congestión)
-    # Mediodía (12-14h): Naranja (moderado)
-    # Noche/Madrugada (fuera de esos rangos): Verde (fluido)
+    if traffic_code == 0 or traffic_code == 5:
+        # 0 Fluido, 5 Paso inferior fluido - Verde claro para indicar buen flujo
+        return [0, 255, 0, 200]  # Verde brillante
 
-    if 6 <= hour < 9 or 17 <= hour < 20:
+    elif traffic_code == 1 or traffic_code == 6:
+        # 1 Denso, 6 Paso inferior denso - Amarillo para indicar lentitud
+        return [255, 255, 0, 200]  # Amarillo
+
+    elif traffic_code == 2 or traffic_code == 7:
+        # 2 Congestionado, 7 Paso inferior congestionado - Naranja para indicar tráfico pesado
+        return [255, 165, 0, 200] # Naranja
+
+    elif traffic_code == 3 or traffic_code == 8:
+        # 3 Cortado, 8 Paso inferior cortado - Rojo para indicar interrupción total
         return [255, 0, 0, 200]  # Rojo
-    elif 12 <= hour < 14:
-        return [255, 140, 0, 200]  # Naranja
+
+    elif traffic_code == 4 or traffic_code == 9:
+        # 4 Sin datos, 9 Sin datos (paso inferior) - Gris para indicar falta de información
+        return [128, 128, 128, 200] # Gris
+
     else:
-        return [0, 200, 0, 200]  # Verde
+        print("Codigo no reconocido:", traffic_code)
+        # Código no reconocido - Blanco o un color por defecto para errores
+        return [255, 255, 255, 255]
+
 
 try:
     df = pd.read_csv("data/base_dataframe.csv")
@@ -64,7 +133,7 @@ center_lon = -0.357
 initial_view_state = pdk.ViewState(
     latitude=center_lat,
     longitude=center_lon,
-    zoom=14,
+    zoom=13,
     pitch=0,
 )
 
@@ -91,6 +160,6 @@ st.pydeck_chart(
         initial_view_state=initial_view_state,
         layers=layers,
     ),
-    use_container_width=True, # Hace que el mapa ocupe todo el ancho disponible
-    height=775, # Define una altura fija de 600 píxeles
+    use_container_width=True,
+    height=775,
 )
