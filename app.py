@@ -1,90 +1,96 @@
 import streamlit as st
+import pydeck as pdk
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
-from datetime import datetime, date
+import datetime
+import json
 
-# --- Datos de ejemplo (simulando datos que podrían cambiar por fecha) ---
-# En una aplicación real, aquí cargarías tus datos reales que contienen información temporal.
-data = {'total_count': 380,
-        'results': [{'gid': 2018,
-                     'denominacion': 'CONSTITUCIÓN (DE HERMANOS MACHADO A TAVERNES BLANQUES)',
-                     'estado': 0,
-                     'idtramo': 282,
-                     'fiwareid': None,
-                     'geo_shape': {'type': 'Feature',
-                                   'geometry': {'coordinates': [[-0.3703238195268041, 39.49847439201998],
-                                                                 [-0.37010717326416565, 39.49960208697644],
-                                                                 [-0.3700874152893759, 39.499694628098716],
-                                                                 [-0.37006381690951845, 39.49978663184986],
-                                                                 [-0.3700363934627394, 39.49987799947833],
-                                                                 [-0.3700051719060921, 39.499968632495154],
-                                                                 [-0.36997020243417633, 39.500058432937095],
-                                                                 [-0.3699315000474089, 39.5001473110527],
-                                                                 [-0.3698891262208219, 39.50023517814223],
-                                                                 [-0.3698430959562572, 39.50032194445366],
-                                                                 [-0.36979348268839846, 39.50040751254864],
-                                                                 [-0.3697403362763767, 39.50049179346373],
-                                                                 [-0.36968370658021643, 39.50057469823525]],
-                                                               'type': 'LineString'},
-                                   'properties': {}},
-                    'geo_point_2d': {'lon': -0.3700778715218118, 'lat': 39.499551709139574}},
-                   {'gid': 2077,
-                    'denominacion': 'PUENTE DEL REAL HACIA VIVEROS',
-                    'estado': 0,
-                    'idtramo': 288,
-                    'fiwareid': None,
-                    'geo_shape': {'type': 'Feature',
-                                  'geometry': {'coordinates': [[-0.36808641709687767, 39.476928883129574],
-                                                                [-0.369412562742749, 39.47566448461972]],
-                                                               'type': 'LineString'},
-                                  'properties': {}},
-                    'geo_point_2d': {'lon': -0.3687494899198133, 'lat': 39.47629668387465}}]}
+st.set_page_config(layout="wide", page_title="Estado Carreteras Valencia")
+st.title("Estado carreteras Valencia")
 
-# Convertir el JSON a un DataFrame de Pandas
-df_original = pd.DataFrame(data['results'])
+today = datetime.date.today()
+selected_date = st.date_input(
+    "Selecciona una fecha:",
+    value=today,
+    key="date_selector"
+)
 
-# --- Función para determinar el color según el estado ---
-def get_color(estado):
-    if estado == 0:
-        return 'green'
-    elif estado == 1:
-        return 'red'
-    elif estado == 2:
-        return 'blue'
+now = datetime.datetime.now().time()
+selected_time = st.time_input(
+    "Selecciona una hora:",
+    step=datetime.timedelta(minutes=15),
+    key="time_selector"
+)
+
+selected_datetime = datetime.datetime.combine(selected_date, selected_time)
+
+st.write(f"Has seleccionado: **{selected_datetime.strftime('%d/%m/%Y %H:%M')}**")
+
+# Función para determinar el color de la carretera
+# NOTA: Esta es una implementación de ejemplo para mostrar la reactividad.
+# DEBES REEMPLAZAR LA LÓGICA DE ESTA FUNCIÓN CON LA TUYA PROPIA.
+def get_color_for_road(gid: str, current_datetime: datetime.datetime):
+    # Lógica de ejemplo: el color cambia con la hora del día
+    hour = current_datetime.hour
+
+    # Simulación de tráfico:
+    # Mañana (6-9h) y tarde (17-20h): Rojo (congestión)
+    # Mediodía (12-14h): Naranja (moderado)
+    # Noche/Madrugada (fuera de esos rangos): Verde (fluido)
+
+    if 6 <= hour < 9 or 17 <= hour < 20:
+        return [255, 0, 0, 200]  # Rojo
+    elif 12 <= hour < 14:
+        return [255, 140, 0, 200]  # Naranja
     else:
-        return 'gray'
+        return [0, 200, 0, 200]  # Verde
 
-# --- Título de la aplicación Streamlit ---
-st.title('Visualización de Tráfico por Fecha')
+try:
+    df = pd.read_csv("data/base_dataframe.csv")
+except FileNotFoundError:
+    st.error("Error: El archivo 'data/base_dataframe.csv' no se encontró. "
+             "Asegúrate de que el archivo existe y la ruta es correcta.")
+    st.stop()
 
-# --- Selector de fecha ---
-st.sidebar.header('Selecciona una Fecha')
-selected_date = st.sidebar.date_input('Fecha', datetime(2025, 1, 1)) # Valor por defecto
+geo_data = {}
+for idx, row in df.iterrows():
+    gid = row["gid"]
+    geo_shape = json.loads(row["geo_shape"])
+    name = row["Denominació / Denominación"]
+    geo_data[gid] = {"name": name, "path": geo_shape["coordinates"]}
 
-# --- Lógica para filtrar/modificar datos según la fecha seleccionada ---
-# En un escenario real, aquí cargarías o filtrarías tus datos basados en `selected_date`.
-# Por ahora, simulamos un cambio de estado para el 1 de enero de 2025.
-df_filtered = df_original.copy()
-if selected_date == date(2025, 1, 1):
-    st.info('Mostrando datos simulados para el 1 de enero de 2025: ¡Todos los tramos en estado "rojo" (problema)!')
-    df_filtered['estado'] = 1 # Cambiamos el estado a 1 (rojo) para el 1 de enero
-else:
-    st.info(f'Mostrando datos para la fecha seleccionada: {selected_date.strftime("%d/%m/%Y")}.')
+center_lat = 39.466
+center_lon = -0.357
 
+initial_view_state = pdk.ViewState(
+    latitude=center_lat,
+    longitude=center_lon,
+    zoom=14,
+    pitch=0,
+)
 
-# --- Crear el mapa centrado en la primera ubicación (o un punto medio) ---
-if not df_filtered.empty:
-    m = folium.Map(location=[df_filtered['geo_point_2d'].iloc[0]['lat'], df_filtered['geo_point_2d'].iloc[0]['lon']], zoom_start=13)
+layers = []
+for gid in geo_data:
+    df_line = pd.DataFrame([geo_data[gid]])
+    
+    current_road_color = get_color_for_road(gid, selected_datetime)
 
-    # Iterar sobre cada calle y dibujar la línea en el mapa
-    for index, row in df_filtered.iterrows():
-        coordinates = row['geo_shape']['geometry']['coordinates']
-        estado = row['estado']
-        color = get_color(estado)
-        folium.PolyLine(locations=[(coord[1], coord[0]) for coord in coordinates], color=color, weight=5, opacity=0.7).add_to(m)
+    line_layer = pdk.Layer(
+        "PathLayer",
+        df_line,
+        get_path="path",
+        get_color=current_road_color,
+        get_width=5,
+        width_min_pixels=2,
+        pickable=True,
+    )
+    layers.append(line_layer)
 
-    # Mostrar el mapa en Streamlit
-    st_folium(m, width=700, height=500)
-else:
-    st.warning("No hay datos disponibles para la fecha seleccionada.")
+st.pydeck_chart(
+    pdk.Deck(
+        map_style="mapbox://styles/mapbox/streets-v11",
+        initial_view_state=initial_view_state,
+        layers=layers,
+    ),
+    use_container_width=True, # Hace que el mapa ocupe todo el ancho disponible
+    height=775, # Define una altura fija de 600 píxeles
+)

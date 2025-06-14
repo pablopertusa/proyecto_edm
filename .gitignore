@@ -5,3 +5,4 @@ data/
 move_data.sh
 modelo.ipynb
 models/
+create_base_dataframe.py
