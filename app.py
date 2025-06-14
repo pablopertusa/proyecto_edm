@@ -8,37 +8,143 @@ import json
 import joblib
 import numpy as np
 
-st.set_page_config(layout="wide", page_title="Estado Carreteras Valencia")
-st.title("Estado carreteras Valencia")
-
-today = datetime.date.today()
-selected_date = st.date_input(
-    "Selecciona una fecha:",
-    value=today,
-    key="date_selector"
+st.set_page_config(
+    layout="wide",
+    page_title="Estado Carreteras Valencia",
+    initial_sidebar_state="auto",
 )
 
-now = datetime.datetime.now().time()
-selected_time = st.time_input(
-    "Selecciona una hora:",
-    step=datetime.timedelta(minutes=15),
-    key="time_selector"
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+
+    html, body, [class*="st-"] {
+        font-family: 'Montserrat', sans-serif;
+    }
+
+    .stApp {
+        background-color: #1a1a2e; /* Fondo oscuro principal */
+        color: #e0e0e0; /* Color de texto claro */
+    }
+
+    .st-emotion-cache-1hwfblv {
+        background-color: #1a1a2e; /* Asegura que el contenedor principal también sea oscuro */
+    }
+
+    .st-emotion-cache-10qik0r {
+        background-color: #2e2e4f; /* Fondo para contenedores/tarjetas */
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Sombra más pronunciada para contraste */
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    h1 {
+        color: #e94560; /* Color de título llamativo */
+        text-align: center;
+        font-size: 3em;
+        margin-bottom: 30px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    h2 {
+        color: #0f3460; /* Un azul oscuro para subtítulos */
+        font-size: 2em;
+        margin-bottom: 15px;
+    }
+
+    h3 {
+        color: #e0e0e0; /* Asegura que los h3 sean claros */
+    }
+
+    .stDateInput, .stTimeInput {
+        background-color: #2e2e4f; /* Fondo de inputs oscuro */
+        border-radius: 8px;
+        padding: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stDateInput label, .stTimeInput label {
+        color: #e0e0e0 !important; /* Color de label claro */
+    }
+
+    .stDateInput input, .stTimeInput input {
+        color: #e0e0e0 !important; /* Color de texto de input claro */
+        background-color: #1a1a2e !important;
+        border: 1px solid #0f3460 !important;
+    }
+
+    .stButton>button {
+        background-color: #e94560; /* Color de botón llamativo */
+        color: white;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 1.1em;
+        transition: all 0.3s ease;
+        border: none;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .stButton>button:hover {
+        background-color: #b82c42; /* Color de botón en hover */
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+    }
+
+    .stTextInput>div>div>input {
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    .stProgress > div > div > div > div {
+        background-color: #4CAF50;
+    }
+
+    .st-emotion-cache-eczf16 {
+        padding-top: 0rem;
+    }
+
+    .stMarkdown p {
+        color: #e0e0e0; /* Asegura que el texto Markdown sea claro */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-selected_datetime = datetime.datetime.combine(selected_date, selected_time)
+st.title("Estado Carreteras Valencia")
 
-st.write(f"Has seleccionado: **{selected_datetime.strftime('%d/%m/%Y %H:%M')}**")
+with st.container():
+    st.markdown("---")
+    st.subheader("Selecciona la Fecha y Hora para la Predicción")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        today = datetime.date.today()
+        selected_date = st.date_input(
+            "Selecciona una fecha:",
+            value=today,
+            key="date_selector",
+            help="Elige la fecha para la que quieres predecir el estado del tráfico."
+        )
+
+    with col2:
+        now = datetime.datetime.now().time()
+        selected_time = st.time_input(
+            "Selecciona una hora:",
+            step=datetime.timedelta(minutes=15),
+            key="time_selector",
+            help="Elige la hora (en intervalos de 15 minutos) para la predicción."
+        )
+
+    selected_datetime = datetime.datetime.combine(selected_date, selected_time)
+
+    st.markdown(f"### Has seleccionado: <span style='color:#e94560; font-weight:bold;'>{selected_datetime.strftime('%d/%m/%Y %H:%M')}</span>", unsafe_allow_html=True)
+    st.markdown("---")
 
 def get_business_day(fecha: datetime.datetime, pais: str = 'ES') -> bool:
-    """
-    Verifica si una fecha es un día laborable, considerando fines de semana y festivos.
-
-    Args:
-        fecha: El objeto datetime.datetime a verificar.
-        pais: El código ISO 3166-1 alpha-2 del país (ej. 'ES' para España).
-              Puedes pasar una lista de países si aplica a múltiples jurisdicciones.
-    """
-    if fecha.weekday() >= 5:  # 5 es sábado, 6 es domingo
+    if fecha.weekday() >= 5:
         return False
 
     dias_festivos = holidays.country_holidays(pais, years=fecha.year)
@@ -49,20 +155,8 @@ def get_business_day(fecha: datetime.datetime, pais: str = 'ES') -> bool:
 def predict_traffic_status(
     model_path: str,
     target_datetime: datetime.datetime,
-    country_code: str = 'ES' # Código de país para los días festivos
+    country_code: str = 'ES'
     ) -> int:
-    """
-    Carga un modelo .joblib y predice el estado del tráfico para una fecha y hora dadas.
-
-    Args:
-        model_path (str): La ruta al archivo del modelo .joblib.
-        target_datetime (datetime.datetime): La fecha y hora para la cual se realizará la predicción.
-        country_code (str): El código ISO del país para determinar los días festivos
-                            (por ejemplo, 'ES' para España).
-
-    Returns:
-        int: La predicción del modelo para el estado del tráfico.
-    """
     try:
         model = joblib.load(model_path)
     except FileNotFoundError:
@@ -88,36 +182,23 @@ def get_color_for_road(gid: str, current_datetime: datetime.datetime):
     traffic_code = predict_traffic_status(model_path, current_datetime)
 
     if traffic_code == 0 or traffic_code == 5:
-        # 0 Fluido, 5 Paso inferior fluido - Verde claro para indicar buen flujo
-        return [0, 255, 0, 200]  # Verde brillante
-
+        return [0, 200, 83, 200]
     elif traffic_code == 1 or traffic_code == 6:
-        # 1 Denso, 6 Paso inferior denso - Amarillo para indicar lentitud
-        return [255, 255, 0, 200]  # Amarillo
-
+        return [255, 230, 0, 200]
     elif traffic_code == 2 or traffic_code == 7:
-        # 2 Congestionado, 7 Paso inferior congestionado - Naranja para indicar tráfico pesado
-        return [255, 165, 0, 200] # Naranja
-
+        return [255, 140, 0, 200]
     elif traffic_code == 3 or traffic_code == 8:
-        # 3 Cortado, 8 Paso inferior cortado - Rojo para indicar interrupción total
-        return [255, 0, 0, 200]  # Rojo
-
+        return [220, 20, 60, 200]
     elif traffic_code == 4 or traffic_code == 9:
-        # 4 Sin datos, 9 Sin datos (paso inferior) - Gris para indicar falta de información
-        return [128, 128, 128, 200] # Gris
-
+        return [150, 150, 150, 200]
     else:
         print("Codigo no reconocido:", traffic_code)
-        # Código no reconocido - Blanco o un color por defecto para errores
         return [255, 255, 255, 255]
-
 
 try:
     df = pd.read_csv("data/base_dataframe.csv")
 except FileNotFoundError:
-    st.error("Error: El archivo 'data/base_dataframe.csv' no se encontró. "
-             "Asegúrate de que el archivo existe y la ruta es correcta.")
+    st.error("Error: El archivo 'data/base_dataframe.csv' no se encontró. Asegúrate de que el archivo existe y la ruta es correcta.")
     st.stop()
 
 geo_data = {}
@@ -154,12 +235,34 @@ for gid in geo_data:
     )
     layers.append(line_layer)
 
+st.subheader("Mapa del Estado del Tráfico en Valencia")
 st.pydeck_chart(
     pdk.Deck(
-        map_style="mapbox://styles/mapbox/streets-v11",
+        map_style="mapbox://styles/mapbox/dark-v11", # Cambio a estilo de mapa oscuro
         initial_view_state=initial_view_state,
         layers=layers,
+        tooltip={"text": "{name}"}
     ),
     use_container_width=True,
-    height=775,
+    height=600,
+)
+
+st.markdown(
+    """
+    <div style='text-align: center; margin-top: 30px;'>
+        <p style='font-size: 0.9em; color: #e0e0e0;'>
+            Esta aplicación predice el estado del tráfico en las carreteras de Valencia
+            basándose en la fecha y hora seleccionadas.
+            <br>
+            Los colores en el mapa indican:
+            <br>
+            <span style='color: rgb(0, 200, 83);'>&#9632; Verde: Fluido</span> |
+            <span style='color: rgb(255, 230, 0);'>&#9632; Amarillo: Denso</span> |
+            <span style='color: rgb(255, 140, 0);'>&#9632; Naranja: Congestionado</span> |
+            <span style='color: rgb(220, 20, 60);'>&#9632; Rojo: Cortado</span> |
+            <span style='color: rgb(150, 150, 150);'>&#9632; Gris: Sin datos</span>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
