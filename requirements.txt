@@ -1,8 +1,6 @@
 streamlit
 pydeck
 holidays
-datetime
-json
 joblib
 numpy
 pandas
