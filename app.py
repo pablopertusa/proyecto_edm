@@ -8,6 +8,9 @@ import json
 import joblib
 import numpy as np
 
+# Accede a la clave de Mapbox desde los secretos de Streamlit
+MAPBOX_API_KEY = st.secrets["mapbox_api_key"]
+
 st.set_page_config(
     layout="wide",
     page_title="Estado Carreteras Valencia",
@@ -173,7 +176,6 @@ def predict_traffic_status(
     features = np.array([[year, month, day, weekday, int(is_business_day), hour]])
 
     prediction = model.predict(features)[0]
-    print(prediction)
 
     return prediction
 
@@ -238,6 +240,7 @@ for gid in geo_data:
 st.subheader("Mapa del Estado del Tráfico en Valencia")
 st.pydeck_chart(
     pdk.Deck(
+        mapbox_api_key=MAPBOX_API_KEY,
         map_style="mapbox://styles/mapbox/dark-v11", # Cambio a estilo de mapa oscuro
         initial_view_state=initial_view_state,
         layers=layers,
