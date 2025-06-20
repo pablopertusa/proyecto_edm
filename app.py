@@ -1,5 +1,4 @@
 import streamlit as st
-import polars as pl
 import pydeck as pdk
 import pandas as pd
 import holidays

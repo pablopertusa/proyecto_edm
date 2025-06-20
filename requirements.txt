@@ -1,0 +1,9 @@
+streamlit
+pydeck
+holidays
+datetime
+json
+joblib
+numpy
+pandas
+scikit-learn
