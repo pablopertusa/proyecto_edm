@@ -240,7 +240,7 @@ for gid in geo_data:
 st.subheader("Mapa del Estado del Tráfico en Valencia")
 st.pydeck_chart(
     pdk.Deck(
-        mapbox_api_key=MAPBOX_API_KEY,
+        api_keys=MAPBOX_API_KEY,
         map_style="mapbox://styles/mapbox/dark-v11", # Cambio a estilo de mapa oscuro
         initial_view_state=initial_view_state,
         layers=layers,
