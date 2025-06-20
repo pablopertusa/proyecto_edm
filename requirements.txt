@@ -2,6 +2,8 @@ streamlit
 pydeck
 holidays
 joblib
+polars
+lightgbm
 numpy
 pandas
 scikit-learn
